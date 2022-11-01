@@ -703,9 +703,14 @@ def train():
         H, W, _ = np.shape(images[0])
         K = intrinsics[0]
                 
-        focal = K[0][0]
+        focal = K[0][0]/4
         hwf = [int(H),int(W),focal]
         
+        K = np.array([
+            [focal, 0, W],
+            [0, focal, H],
+            [0, 0, 1]
+            ])
     else:
         H, W, focal = hwf
         H, W = int(H), int(W)
@@ -749,8 +754,6 @@ def train():
         f = os.path.join(basedir, expname, 'config.txt')
         with open(f, 'w') as file:
             file.write(open(args.config, 'r').read())
-    
-    print(f"Saving to: {expname}")
 
     # Create nerf model
     render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer = create_nerf(args)
@@ -950,11 +953,6 @@ def train():
 
         if i%args.i_video==0 and i > 0:
             # Turn on testing mode
-            if args.dataset_type == 'ev_data':
-                H, W, _ = np.shape(images[i_test[0]])
-                K = intrinsics[i_test[0]]        
-                hwf = [int(H),int(W),K[0][0]]
-
             with torch.no_grad():
                 rgbs, disps = render_path(render_poses, hwf, K, args.chunk, render_kwargs_test)
             print('Done, saving', rgbs.shape, disps.shape)
@@ -975,15 +973,12 @@ def train():
             print('test poses shape', poses[i_test].shape)
             with torch.no_grad():
                 if args.dataset_type == 'ev_data':
-                    for i in i_test:
-                        H, W, _ = np.shape(images[i])
-                        K = intrinsics[i]        
-                        hwf = [int(H),int(W),K[0][0]]
-                        render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i], savedir=testsavedir)
-                        print(f'Saved test set: {i}')
+                    testimgs = [images[i] for i in i_test]
                 else:
-                    render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
-                    print('Saved test set')
+                    testimgs = images[i_test]
+
+                render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, args.chunk, render_kwargs_test, gt_imgs=testimgs, savedir=testsavedir)
+            print('Saved test set')
 
 
 

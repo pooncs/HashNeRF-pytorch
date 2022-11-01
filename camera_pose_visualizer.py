@@ -55,10 +55,16 @@ class CameraPoseVisualizer:
 
 if __name__ == '__main__':
     poses = []
-    with open(os.path.join('data/nerf_synthetic/chair/', 'transforms_train.json'), 'r') as fp:
+    with open(os.path.join('/home/ubuntu/data/shuttle8/', 'transforms.json'), 'r') as fp:
         meta = json.load(fp)
         for frame in meta['frames']:
-            poses.append(np.array(frame['transform_matrix']))
+            pose = np.array(frame['transform_matrix'])
+            #poses[:3, 3] /= aabb_scale
+            pose[:3, 3] *= 0.001
+            pose[:3, 3] += [0., 0., 1.]
+            poses.append(pose)
+    
+   
     t_arr = np.array([pose[:3,-1] for pose in poses])
     maxes = t_arr.max(axis=0)
     mins = t_arr.min(axis=0)

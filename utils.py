@@ -1,6 +1,5 @@
 import json
 import numpy as np
-import pdb
 import torch
 
 from ray_utils import get_rays, get_ray_directions, get_ndc_rays
@@ -57,6 +56,44 @@ def get_bbox3d_for_blenderobj(camera_transforms, H, W, near=2.0, far=6.0):
 
     return (torch.tensor(min_bound)-torch.tensor([1.0,1.0,1.0]), torch.tensor(max_bound)+torch.tensor([1.0,1.0,1.0]))
 
+def get_bbox3d_from_EV_aabb(aabb):
+    min_bound = aabb[0]
+    max_bound = aabb[1]
+    return (torch.tensor(min_bound), torch.tensor(max_bound))
+
+
+def get_bbox3d_for_EV(camera_transforms, near=2.0, far=6.0):
+    min_bound = [100, 100, 100]
+    max_bound = [-100, -100, -100]
+    
+    points = []
+
+    for frame in camera_transforms["frames"]:
+        H, W, focal = int(frame['h']), int(frame['w']), float(frame['fl_x'])
+
+        # ray directions in camera coordinates
+        directions = get_ray_directions(H, W, focal)
+
+        c2w = torch.FloatTensor(frame["transform_matrix"])
+        rays_o, rays_d = get_rays(directions, c2w)
+        
+        def find_min_max(pt):
+            for i in range(3):
+                if(min_bound[i] > pt[i]):
+                    min_bound[i] = pt[i]
+                if(max_bound[i] < pt[i]):
+                    max_bound[i] = pt[i]
+            return
+
+        for i in [0, W-1, H*W-W, H*W-1]:
+            min_point = rays_o[i] + near*rays_d[i]
+            max_point = rays_o[i] + far*rays_d[i]
+            points += [min_point, max_point]
+            find_min_max(min_point)
+            find_min_max(max_point)
+        
+    #return (torch.tensor(min_bound), torch.tensor(max_bound))
+    return (torch.tensor(min_bound)-torch.tensor([1.0,1.0,1.0]), torch.tensor(max_bound)+torch.tensor([1.0,1.0,1.0]))
 
 def get_bbox3d_for_llff(poses, hwf, near=0.0, far=1.0):
     H, W, focal = hwf
@@ -101,8 +138,7 @@ def get_voxel_vertices(xyz, bounding_box, resolution, log2_hashmap_size):
     box_min, box_max = bounding_box
 
     if not torch.all(xyz <= box_max) or not torch.all(xyz >= box_min):
-        # print("ALERT: some points are outside bounding box. Clipping them!")
-        pdb.set_trace()
+        #print("ALERT: some points are outside bounding box. Clipping them!")
         xyz = torch.clamp(xyz, min=box_min, max=box_max)
 
     grid_size = (box_max-box_min)/resolution
